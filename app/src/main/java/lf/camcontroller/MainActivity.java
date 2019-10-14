@@ -365,53 +365,99 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 // MODIFY ACCORDING TO YOUR NEED >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     private static final Scalar GREEN_LOWER = new Scalar(29, 86, 6);
     private static final Scalar GREEN_UPPER = new Scalar(70, 255, 255);
+    private static final Scalar RED_LOWER0 = new Scalar(0, 120, 70);
+    private static final Scalar RED_UPPER0 = new Scalar(10, 255, 255);
+    private static final Scalar RED_LOWER1 = new Scalar(170, 120, 70);
+    private static final Scalar RED_UPPER1 = new Scalar(180, 255, 255);
+    private static final Scalar YELLOW_LOWER = new Scalar(85, 50, 50);
+    private static final Scalar YELLOW_UPPER = new Scalar(110, 255, 255);
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        mRgba = inputFrame.rgba();                                          // mRgba: camera captured frame in RGBA color space
-        Mat greenMask = null, hsvBlur = null;                               // declare a matrices to store greenMasked image and image which is in hsv color space as well as blurred.
+        mRgba = inputFrame.rgba();                                          // mRgba: frame in RGBA color space
+        Mat greenMask = null, yellowMask = null, redMask = null, redMaskTemp = null, hsvBlur = null;
+        double[] maxContourArea = {0, 0, 0};                           // 0 -> max area of green contour; 1 -> max area of yellow contour
+        Point[] encloseCenter = new Point[3];                           // 0 -> Center of green; 1 -> Center of yellow
+        encloseCenter[0] = new Point(0,0);
+        encloseCenter[1] = new Point(0,0);
+        encloseCenter[2] = new Point(0,0);
         if (isRoboOn) {
             greenMask = new Mat(mRgba.size(), CvType.CV_8UC4);              // creates a matrix for green-masked image
+            yellowMask = new Mat(mRgba.size(), CvType.CV_8UC4);              // creates a matrix for blue-masked image
+            redMask = new Mat(mRgba.size(), CvType.CV_8UC4);
+            redMaskTemp = new Mat(mRgba.size(), CvType.CV_8UC4);
             hsvBlur = new Mat(mRgba.size(), CvType.CV_8UC4);
             List<MatOfPoint> contours = new ArrayList<>();                  // stores the list of all the contours
             Mat interHi = new Mat();                                        // another extra matrix for manipulation
             float[] enclosingRadius = new float[1];                        // variable to store object's enclosing circle's radius
             Point tempEncloseCenter = new Point();                           // variable to store object's enclosing circle's center
 
-            Imgproc.GaussianBlur(mRgba, hsvBlur, new Size(5, 5), 0);        // Blur the image. Vary the values of width,height to adjust blurring
+            Imgproc.GaussianBlur(mRgba, hsvBlur, new Size(5, 5), 0);        // Blur the image
             Imgproc.cvtColor(hsvBlur, hsvBlur, Imgproc.COLOR_BGR2HSV);                           //  Convert the color space to HSV
             Core.inRange(hsvBlur, GREEN_LOWER, GREEN_UPPER, greenMask);                          // Create green-masked image
+            Core.inRange(hsvBlur, YELLOW_LOWER, YELLOW_UPPER, yellowMask);                          // Create green-masked image
+            Core.inRange(hsvBlur, RED_LOWER0, RED_UPPER0, redMaskTemp);
+            Core.inRange(hsvBlur, RED_LOWER1, RED_UPPER1, redMask);
+            Core.add(redMask,redMaskTemp,redMask);
 
-            // find green contours with radius really big
+            redMaskTemp.release();
+
             Imgproc.findContours(greenMask, contours, interHi, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
             if (contours.size() > 0) {
-                double maxContourArea = 0;
                 int maxValIdx = 0;
                 // loop to find the contour with maximum area.
                 for (int contourIdx = 0; contourIdx < contours.size(); contourIdx++) {
                     double contourArea = Imgproc.contourArea(contours.get(contourIdx));
-                    if (maxContourArea < contourArea) {
-                        maxContourArea = contourArea;
+                    if (maxContourArea[0] < contourArea) {
+                        maxContourArea[0] = contourArea;
                         maxValIdx = contourIdx;
                     }
                 }
                 Imgproc.minEnclosingCircle(new MatOfPoint2f(contours.get(maxValIdx).toArray()), tempEncloseCenter, enclosingRadius);
-                if (enclosingRadius[0] > 100) Log("GREEN Card detected!");
-                else Log("Nothing detected.");
+                if (enclosingRadius[0] > 100) encloseCenter[0] = tempEncloseCenter.clone();
             }
-            contours.clear();               // clear data from contour arrayList.
+            contours.clear();
+            Imgproc.findContours(yellowMask, contours, interHi, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+            if (contours.size() > 0){
+                int maxValIdx = 0;
+                // loop to find the contour with maximum area.
+                for (int contourIdx = 0; contourIdx < contours.size(); contourIdx++) {
+                    double contourArea = Imgproc.contourArea(contours.get(contourIdx));
+                    if (maxContourArea[1] < contourArea) {
+                        maxContourArea[1] = contourArea;
+                        maxValIdx = contourIdx;
+                    }
+                }
+                Imgproc.minEnclosingCircle(new MatOfPoint2f(contours.get(maxValIdx).toArray()), tempEncloseCenter, enclosingRadius);
+                if (enclosingRadius[0] > 100) encloseCenter[1] = tempEncloseCenter.clone();
+            }
+            contours.clear();
+            Imgproc.findContours(redMask, contours, interHi, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+            if (contours.size() > 0){
+                int maxValIdx = 0;
+                // loop to find the contour with maximum area.
+                for (int contourIdx = 0; contourIdx < contours.size(); contourIdx++) {
+                    double contourArea = Imgproc.contourArea(contours.get(contourIdx));
+                    if (maxContourArea[2] < contourArea) {
+                        maxContourArea[2] = contourArea;
+                        maxValIdx = contourIdx;
+                    }
+                }
+                Imgproc.minEnclosingCircle(new MatOfPoint2f(contours.get(maxValIdx).toArray()), tempEncloseCenter, enclosingRadius);
+                if (enclosingRadius[0] > 100) encloseCenter[2] = tempEncloseCenter.clone();
+            }
 
-            interHi.release();          // release data from intermediatary matrix.
+            tempEncloseCenter.x = 0;
+            tempEncloseCenter.y = 0;
+            if((maxContourArea[0]>maxContourArea[1])&&(maxContourArea[0]>maxContourArea[2])&&!(encloseCenter[0].equals(tempEncloseCenter.clone()))) Log("GREEN");
+            else if((maxContourArea[1]>maxContourArea[0])&&(maxContourArea[1]>maxContourArea[2])&&!(encloseCenter[1].equals(tempEncloseCenter.clone()))) Log("YELLOW");
+            else if(!(encloseCenter[2].equals(tempEncloseCenter.clone()))) Log("RED");
+            else Log("Nothing");
+
+            //inter.release();
+            interHi.release();
         }
-        return greenMask; // replace greenMask with mRgba to view the frame directly from camera.
+        //Imgproc.line(mRgba, new Point(frameCenter.x - SENSITIVITY, 0), new Point(frameCenter.x - SENSITIVITY, 720), new Scalar(0, 0, 0), 7);
+        //Imgproc.line(mRgba, new Point(frameCenter.x + SENSITIVITY, 0), new Point(frameCenter.x + SENSITIVITY, 720), new Scalar(0, 0, 0), 7);
+        return redMask;
     }
 }
-/*
-Description of useful functions:
-    sendCommand(): sends a character to the usb device connected.
-    Log(): prints the string onto the text view of the app.
-What each button does:
-    'ImageProc Start'(/Stop): Starts or stops image processing
-    'USB Start'(/Stop): Start/Stops usb communication between smartphone and arduino
-    'Echo 'M'': sends the character 'M' to arduino.
-    'Back Camera'/Front Camera: Toggles between front and back camera. Default: back camera
- */
