@@ -4,3 +4,4 @@ The android application detects green colored objects and is capable of commandi
 Function descriptions are written inside MainActivity.java file. The function in which the algorithm of image processing is coded, follows
 the same pseodo-code as followed by the python file greenDetection.py . 
 
+References: https://www.pyimagesearch.com/2015/09/14/ball-tracking-with-opencv/
